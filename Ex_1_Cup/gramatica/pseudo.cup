@@ -1,0 +1,213 @@
+package gramatica;
+
+import java_cup.runtime.*;
+import gramatica.sym;
+import gramatica.Lexer;
+import java_cup.runtime.XMLElement;
+import clasesDAO.Token;
+import clasesDAO.TokenError;
+import java.util.ArrayList;
+import java.util.List;
+
+parser code{:
+    //Listado de errores	
+	//Controlador de error sintactico
+    ArrayList<TokenError> listadoErroresSintacticos = new ArrayList();
+	
+	@Override
+	public void syntax_error(Symbol a){
+		Token tokenError = (Token) a.value;//lo transformamos en token para obtener su lexema, fila y columna		
+		String msgError = "Se esperaba: ";	
+		
+                
+		int linea = (tokenError != null) ? tokenError.getLinea() : 0;
+		int columna = (tokenError != null) ? tokenError.getColumna() : 0;
+
+		if(a.sym == sym.EOF){
+			System.out.println("END OF FILE");
+			TokenError tokenErrorAux = new TokenError("ERROR SINTACTICO", "Etiqueta de cierre", "La etiqueta de cierre debe ser <C_GCIC>", -1, -1);
+			listadoErroresSintacticos.add(tokenErrorAux);
+		}else{
+			for(int i = 0; i < expected_token_ids().size(); i++){
+				//msgError = msgError + mensajes[expected_token_ids().get(i)];
+				msgError = msgError + symbl_name_from_id(expected_token_ids().get(i)) + " ";
+
+				if(i < expected_token_ids().size() - 1)
+					msgError = msgError + ", ";			
+			}
+			//System.out.println("error de sintaxis: linea: "+tokenError.getLexema()+" "+tokenError.getLinea()+" columna: "+tokenError.getColumna()+" MENSAJE: "+msgError);
+			TokenError tokenErrorAux = new TokenError("ERROR SINTACTICO", tokenError.getLexema(), msgError, linea, columna);
+			listadoErroresSintacticos.add(tokenErrorAux);
+		}		
+	}
+	
+	public void report_error(String message, Object info) {
+        System.out.println("Reportar Error");
+    }
+    
+	public void report_fatal_error(String message, Object info) {
+        System.out.println("Error Fatal: " + info);
+    }
+
+    protected int error_sync_size() {
+        return 1;
+    }
+:}
+
+//SIMBOLOS
+terminal Token PERCENT     ;
+terminal Token IGUAL       ;
+terminal Token MENOR       ;
+terminal Token MAYOR       ;
+terminal Token CORCH_INI   ;
+terminal Token CORCH_FIN   ;
+terminal Token PAREN_INI   ;
+terminal Token PAREN_FIN   ;
+terminal Token LLAVE_INI   ;
+terminal Token LLAVE_FIN   ;
+terminal Token COMA        ;
+terminal Token PUNTO_COMA  ;
+terminal Token DOS_PUNTOS  ;
+terminal Token IGUAL_IGUAL ;
+terminal Token NO_IGUAL    ;
+terminal Token MENOR_IGUAL ;
+terminal Token MAYOR_IGUAL ;
+
+//OPERADORES MATEMATICOS
+terminal Token SIGNO_MAS   ;
+terminal Token SIGNO_MIN   ;
+terminal Token SIGNO_POR   ;
+terminal Token SIGNO_DIV   ;
+
+//PARA
+terminal Token PARA        ;
+terminal Token FIN_PARA    ;
+terminal Token HASTA       ;
+terminal Token HACER       ;
+
+//TYPES
+terminal Token DATA_TYPE   ;
+//VALUES
+terminal Token STRING_VALUE    ;
+terminal Token INTEGER_VALUE   ;
+
+//////////////////////////////////IDS
+terminal Token ID_VALUE        ;
+
+////////////////////////////////////////////////////////////////NO TERMINALES
+non terminal inicio;
+non terminal bloque_instrucciones;
+non terminal instruccion_varios;
+non terminal instruccion;
+non terminal instruccion_para;
+non terminal declaracion;
+non terminal asignacion;
+non terminal Token operacion_general;
+non terminal Token valores_datos_primarios;
+
+////////////////////////////////////////////////////////////////PRECEDENCIA
+/* 1 */ //precedence left SIMBOL_OR;
+/* 2 */ //precedence left SIMBOL_AND;
+/* 3 */ precedence nonassoc IGUAL_IGUAL, NO_IGUAL;
+/* 4 */ precedence nonassoc MAYOR_IGUAL, MENOR_IGUAL, MENOR, MAYOR;
+/* 5 */ precedence left SIGNO_MAS, SIGNO_MIN;
+/* 6 */ precedence left SIGNO_POR, SIGNO_DIV;
+/* 7 */ //precedence right SIMBOL_NOT;
+
+////////////////////////////////////////////////////////////////PRODUCCIONES
+start with inicio;
+
+inicio ::= bloque_instrucciones
+ | //epsilon 
+ ;
+
+bloque_instrucciones ::= LLAVE_INI instruccion_varios LLAVE_FIN
+ ;
+
+instruccion_varios ::= instruccion_varios instruccion PUNTO_COMA
+ | //epsilon
+ ;
+
+instruccion ::= instruccion_para
+   {: System.out.println("Se ejecuto una instruccion para"); :}
+ | declaracion
+   {: System.out.println("Se ejecuto una delcaracion"); :}
+ | asignacion
+   {: System.out.println("Se ejecuto una asignacion"); :}
+ ;
+
+instruccion_para ::= PARA bloque_instrucciones FIN_PARA;
+
+declaracion ::= DATA_TYPE:type ID_VALUE:id  
+  {: System.out.println("Se requiere declarar una variable de tipo <" + type.getLexema() + "> con nombre de variable <" + id.getLexema() + ">" ); :}
+  ;
+
+asignacion ::= ID_VALUE IGUAL operacion_general
+  ;
+
+operacion_general ::= 
+	/////////////OPERACIONES LOGICAS
+	//  operacion_general:valor1 SIMBOL_AND:a  operacion_general:valor2
+    //| operacion_general:valor1 SIMBOL_OR:a   operacion_general:valor2 
+    //| SIMBOL_NOT:a operacion_general:valor1 
+    /////////////OPERACIONES RELACIONALES
+      operacion_general:valor1 MAYOR:a       operacion_general:valor2
+	{: 
+		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+	:} 
+    | operacion_general:valor1 MENOR:a       operacion_general:valor2
+    {: 
+		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+	:}
+	| operacion_general:valor1 MAYOR_IGUAL:a operacion_general:valor2 
+    {: 
+		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+	:}
+	| operacion_general:valor1 MENOR_IGUAL:a operacion_general:valor2 
+    {: 
+		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+	:}
+	| operacion_general:valor1 NO_IGUAL:a    operacion_general:valor2 
+    {: 
+		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+	:}
+	| operacion_general:valor1 IGUAL_IGUAL:a operacion_general:valor2 
+	{: 
+		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+	:}
+	/////////////OPERACIONES ARITMETICAS
+	| operacion_general:valor1 SIGNO_MAS:a operacion_general:valor2
+	{: 
+		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+	:}
+    | operacion_general:valor1 SIGNO_MIN:a operacion_general:valor2
+	{: 
+		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+	:}
+    | operacion_general:valor1 SIGNO_POR:a operacion_general:valor2
+    {: 
+		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+	:}
+	| operacion_general:valor1 SIGNO_DIV:a operacion_general:valor2
+	{: 
+		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+	:}
+	/////////////VALORES
+    | valores_datos_primarios:valorElementoAux
+	{: 
+		System.out.println("Se obctuvo un valor primario: " + valorElementoAux.getLexema()); 
+		RESULT = valorElementoAux;
+	:}
+	| SIGNO_MIN operacion_general:valor1
+	{: 
+		System.out.println("Se ejecuto una operacion de tipo UNARY sobre el valor"  /*+ valor1.getLexema()*/); 
+	:}
+	| PAREN_INI operacion_general:valorElementoAux PAREN_FIN 
+	| error //datos primarios
+    ;    
+
+valores_datos_primarios ::= 
+      STRING_VALUE:a {: RESULT = a; :}
+	| INTEGER_VALUE:a {: RESULT = a; :}
+	| ID_VALUE:a {: RESULT = a; :}
+	;
