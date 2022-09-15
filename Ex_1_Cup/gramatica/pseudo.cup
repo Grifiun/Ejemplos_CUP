@@ -8,12 +8,16 @@ import clasesDAO.Token;
 import clasesDAO.TokenError;
 import java.util.ArrayList;
 import java.util.List;
+import entidades.*;
 
 parser code{:
     //Listado de errores	
 	//Controlador de error sintactico
     ArrayList<TokenError> listadoErroresSintacticos = new ArrayList();
-	
+	ListadoInstrucciones listadoInstruccionesGenerales;
+
+	int ident = 0;
+
 	@Override
 	public void syntax_error(Symbol a){
 		Token tokenError = (Token) a.value;//lo transformamos en token para obtener su lexema, fila y columna		
@@ -49,9 +53,33 @@ parser code{:
         System.out.println("Error Fatal: " + info);
     }
 
+	public void aumentarIdentacion(){
+		ident++;
+	}
+
+	public void reducirIdentacion(){
+		ident--;
+	}
+
+	public int getIdentacion(){
+		return this.ident;
+	}
+
     protected int error_sync_size() {
         return 1;
     }
+
+	public void setListadoInstrucciones(ListadoInstrucciones listado){
+		this.listadoInstruccionesGenerales = listado;
+	}
+
+	public String obtenerCodigoJava(){
+		if(listadoInstruccionesGenerales != null){
+			return listadoInstruccionesGenerales.generarCodigoJavaGOD();
+		}else{
+			return "";
+		}
+	}
 :}
 
 //SIMBOLOS
@@ -96,14 +124,15 @@ terminal Token ID_VALUE        ;
 
 ////////////////////////////////////////////////////////////////NO TERMINALES
 non terminal inicio;
-non terminal bloque_instrucciones;
-non terminal instruccion_varios;
-non terminal instruccion;
-non terminal instruccion_para;
-non terminal declaracion;
-non terminal asignacion;
-non terminal Token operacion_general;
-non terminal Token valores_datos_primarios;
+non terminal ListadoInstrucciones bloque_instrucciones;
+non terminal ArrayList<Traductor> instruccion_varios;
+non terminal Traductor instruccion;
+non terminal Traductor instruccion_para;
+non terminal Traductor instruccion_para_inicio;
+non terminal Declaracion declaracion;
+non terminal Asignacion asignacion;
+non terminal ValorElemento operacion_general;
+non terminal ValorElemento valores_datos_primarios;
 
 ////////////////////////////////////////////////////////////////PRECEDENCIA
 /* 1 */ //precedence left SIMBOL_OR;
@@ -117,32 +146,70 @@ non terminal Token valores_datos_primarios;
 ////////////////////////////////////////////////////////////////PRODUCCIONES
 start with inicio;
 
-inicio ::= bloque_instrucciones
+inicio ::= bloque_instrucciones:bloqueInstrucciones {: setListadoInstrucciones(bloqueInstrucciones); :}
  | //epsilon 
  ;
 
-bloque_instrucciones ::= LLAVE_INI instruccion_varios LLAVE_FIN
+bloque_instrucciones ::= LLAVE_INI {: aumentarIdentacion(); :} instruccion_varios:listadoInstrucciones LLAVE_FIN 
+	{:
+		ListadoInstrucciones listadoInstruccionesAux = new ListadoInstrucciones(listadoInstrucciones);
+		reducirIdentacion();
+		RESULT = listadoInstruccionesAux;
+	:}
  ;
 
-instruccion_varios ::= instruccion_varios instruccion PUNTO_COMA
+instruccion_varios ::= instruccion_varios:listadoActual instruccion:instruccion PUNTO_COMA
+	{:
+		listadoActual.add(instruccion);
+		RESULT = listadoActual;
+	:}
  | //epsilon
+	{:
+		RESULT = new ArrayList();
+	:}
  ;
 
-instruccion ::= instruccion_para
-   {: System.out.println("Se ejecuto una instruccion para"); :}
- | declaracion
-   {: System.out.println("Se ejecuto una delcaracion"); :}
- | asignacion
-   {: System.out.println("Se ejecuto una asignacion"); :}
+instruccion ::= instruccion_para:instruccion
+   {: RESULT = instruccion; :}
+ | declaracion:instruccion
+   {: RESULT = instruccion; :}
+ | asignacion:instruccion
+   {: RESULT = instruccion; :}
  ;
 
-instruccion_para ::= PARA bloque_instrucciones FIN_PARA;
+instruccion_para ::= PARA PAREN_INI instruccion_para_inicio:inicio PUNTO_COMA operacion_general:fin PUNTO_COMA operacion_general:paso PAREN_FIN 
+					 bloque_instrucciones:listadoInstrucciones FIN_PARA
+					{:
+						Para para = new Para(inicio, fin, paso, listadoInstrucciones, getIdentacion());
+						RESULT = para;
+					:}				 
+					 
+	;
 
-declaracion ::= DATA_TYPE:type ID_VALUE:id  
-  {: System.out.println("Se requiere declarar una variable de tipo <" + type.getLexema() + "> con nombre de variable <" + id.getLexema() + ">" ); :}
+instruccion_para_inicio ::= asignacion:asignacion {: RESULT = asignacion; :}
+	| declaracion:declaracion {: RESULT = declaracion; :}
   ;
 
-asignacion ::= ID_VALUE IGUAL operacion_general
+declaracion ::= DATA_TYPE:type ID_VALUE:id  
+  	{:
+		Elemento elemento = new Elemento(id.getLexema(), null, getIdentacion());
+		Declaracion declaracion = new Declaracion(elemento, getIdentacion(), type.getLexema());
+		RESULT = declaracion;
+  	:}
+  | DATA_TYPE:type asignacion:asignacion
+  	{:
+		Declaracion declaracion = new Declaracion(null, getIdentacion(), type.getLexema());
+		declaracion.setAsignacion(asignacion);
+		RESULT = declaracion;
+  	:}
+	;
+
+asignacion ::= ID_VALUE:nombre IGUAL operacion_general:valor1
+	{:
+		Elemento elemento = new Elemento(nombre.getLexema(), valor1, getIdentacion());
+		Asignacion asignacion = new Asignacion(elemento, getIdentacion());
+		RESULT = asignacion;
+	:}
   ;
 
 operacion_general ::= 
@@ -153,61 +220,60 @@ operacion_general ::=
     /////////////OPERACIONES RELACIONALES
       operacion_general:valor1 MAYOR:a       operacion_general:valor2
 	{: 
-		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+		RESULT = valor1;
 	:} 
     | operacion_general:valor1 MENOR:a       operacion_general:valor2
     {: 
-		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+		RESULT = valor1;
 	:}
 	| operacion_general:valor1 MAYOR_IGUAL:a operacion_general:valor2 
     {: 
-		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+		RESULT = valor1;
 	:}
 	| operacion_general:valor1 MENOR_IGUAL:a operacion_general:valor2 
     {: 
-		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+		RESULT = valor1;
 	:}
 	| operacion_general:valor1 NO_IGUAL:a    operacion_general:valor2 
     {: 
-		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+		RESULT = valor1;
 	:}
 	| operacion_general:valor1 IGUAL_IGUAL:a operacion_general:valor2 
 	{: 
-		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+		RESULT = valor1;
 	:}
 	/////////////OPERACIONES ARITMETICAS
 	| operacion_general:valor1 SIGNO_MAS:a operacion_general:valor2
 	{: 
-		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+		RESULT = valor1;		
 	:}
     | operacion_general:valor1 SIGNO_MIN:a operacion_general:valor2
 	{: 
-		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+		RESULT = valor1;
 	:}
     | operacion_general:valor1 SIGNO_POR:a operacion_general:valor2
     {: 
-		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+		RESULT = valor1;
 	:}
 	| operacion_general:valor1 SIGNO_DIV:a operacion_general:valor2
 	{: 
-		System.out.println("Se ejecuto una operacion de tipo " + a.getLexema() /*+ "entre los valores: " + valor1.getLexema() + " y "+ valor2.getLexema()*/); 
+		RESULT = valor1;
 	:}
 	/////////////VALORES
-    | valores_datos_primarios:valorElementoAux
+    | valores_datos_primarios:valor1
 	{: 
-		System.out.println("Se obctuvo un valor primario: " + valorElementoAux.getLexema()); 
-		RESULT = valorElementoAux;
+		RESULT = valor1;
 	:}
 	| SIGNO_MIN operacion_general:valor1
 	{: 
-		System.out.println("Se ejecuto una operacion de tipo UNARY sobre el valor"  /*+ valor1.getLexema()*/); 
+		RESULT = valor1;
 	:}
-	| PAREN_INI operacion_general:valorElementoAux PAREN_FIN 
+	| PAREN_INI operacion_general:valor1 PAREN_FIN 
 	| error //datos primarios
     ;    
 
 valores_datos_primarios ::= 
-      STRING_VALUE:a {: RESULT = a; :}
-	| INTEGER_VALUE:a {: RESULT = a; :}
-	| ID_VALUE:a {: RESULT = a; :}
+      STRING_VALUE:a  {: RESULT = new ValorElemento(a.getLexema(), "string"); :}
+	| INTEGER_VALUE:a {: RESULT = new ValorElemento(a.getLexema(), "integer"); :}
+	| ID_VALUE:a      {: RESULT = new ValorElemento(a.getLexema(), "integer"); :}
 	;

@@ -352,7 +352,9 @@ public class Ventana extends javax.swing.JFrame {
                 
                 try{                        
                     pars.parse();    
-                    txtSalida.setText("");                    
+                    txtSalida.setText("");
+
+                    txtSalida.setText(pars.obtenerCodigoJava());
                        
                 }catch(Exception ex){
                     System.out.println("Error en la ejecucion del parser "+ex.getMessage());
